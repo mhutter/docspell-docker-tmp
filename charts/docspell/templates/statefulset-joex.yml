@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "docspell.fullname" . }}-joex
+  labels:
+    {{- include "docspell.labels" . | nindent 4 }}
+    docspell-component: joex
+spec:
+  replicas: {{ .Values.joex.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "docspell.selectorLabels" . | nindent 6 }}
+      docspell-component: joex
+  serviceName: docspell-joex
+  template:
+    metadata:
+      annotations:
+        secret-hash: {{ include (print $.Template.BasePath "/secret-joex.yml") $ | sha256sum }}
+        config-hash: {{ include (print $.Template.BasePath "/configmap-joex.yml") $ | sha256sum }}
+      labels:
+        {{- include "docspell.selectorLabels" . | nindent 8 }}
+        docspell-component: joex
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: joex
+        image: {{ print .Values.joex.image.repo ":" (.Values.joex.image.tag | default .Values.image.tag | default (print "v" .Chart.AppVersion)) | quote }}
+        imagePullPolicy: {{ .Values.joex.image.pullPolicy | default .Values.image.pullPolicy | quote }}
+        command: ['/custom-entrypoint.sh']
+        args:
+        {{- range .Values.joex.jvmOptions }}
+        - {{ . | quote }}
+        {{- end }}
+        - '--'
+        - '/opt/docspell.conf'
+        envFrom:
+        - secretRef:
+            name: {{ .Values.jdbc.credentialsSecretName }}
+        ports:
+        - name: api
+          containerPort: 7878
+          protocol: TCP
+        volumeMounts:
+        - name: config
+          mountPath: /opt/docspell.conf
+          subPath: config
+        - name: configmap
+          mountPath: /custom-entrypoint.sh
+          subPath: entrypoint.sh
+          readOnly: true
+        resources:
+          {{- toYaml .Values.joex.resources | nindent 12 }}
+      volumes:
+      - name: config
+        secret:
+          secretName: {{ include "docspell.fullname" . }}-joex-config
+      - name: configmap
+        configMap:
+          name: {{ include "docspell.fullname" . }}-joex-configmap
+          defaultMode: 0755

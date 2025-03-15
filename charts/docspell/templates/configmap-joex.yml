@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "docspell.fullname" . }}-joex-configmap
+  labels:
+    {{- include "docspell.labels" . | nindent 4 }}
+    docspell-component: joex
+data:
+  entrypoint.sh: |
+    #!/bin/sh
+    export BASE_URL="http://$HOSTNAME.docspell-joex:7878"
+    exec /opt/joex-entrypoint.sh "$@"

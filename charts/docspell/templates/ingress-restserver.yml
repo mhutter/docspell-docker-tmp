@@ -1,0 +1,32 @@
+{{- if .Values.restserver.ingress.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "docspell.fullname" . }}-restserver
+  labels:
+    {{- include "docspell.labels" . | nindent 4 }}
+    docspell-component: restserver
+  {{- with .Values.restserver.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.restserver.ingress.className }}
+  rules:
+  - host: {{ .Values.restserver.publicDomain }}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: {{ include "docspell.fullname" . }}-restserver
+            port:
+              number: {{ .Values.restserver.bindPort }}
+  {{- if .Values.restserver.ingress.tlsSecretName }}
+  tls:
+  - hosts:
+    - {{ .Values.restserver.publicDomain }}
+    secretName: {{ .Values.restserver.ingress.tlsSecretName }}
+  {{- end }}
+{{- end }}

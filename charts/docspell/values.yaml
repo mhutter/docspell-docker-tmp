@@ -1,0 +1,163 @@
+image:
+  tag: null
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+jdbc:
+  host: 'localhost'
+  port: 5432
+  database: docspell
+  credentialsSecretName: credentialsSecretName
+
+files:
+  config: ''
+
+fullTextSearchConfig: |
+  enabled = true
+  backend = "postgresql"
+
+  postgresql = {
+    use-default-connection = true
+  }
+
+restserver:
+  image:
+    repo: 'ghcr.io/docspell/restserver'
+    tag: null
+    pullPolicy: null
+  replicas: 1
+  resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+  appName: Docspell
+  publicDomain: documents.example.org
+  serverSecret: null
+  bindPort: 7880
+  signup:
+    mode: open
+    invite:
+      password: null
+      time: '3 days'
+  config: |
+    docspell.server {
+      app-name = {{ .Values.restserver.appName | quote }}
+      app-id = ${HOSTNAME}
+      {{- if .Values.restserver.ingress.enabled }}
+      base-url = {{ print (ternary "https" "http"  (not (not .Values.restserver.ingress.tlsSecretName))) "://" .Values.restserver.publicDomain | quote }}
+      {{- end }}
+      internal-url = "http://{{ include "docspell.fullname" . }}-restserver:{{ .Values.restserver.bindPort }}"
+
+      logging {
+        minimum-level = "Debug"
+
+        levels = {
+          "docspell" = "Debug"
+        }
+      }
+
+      bind {
+        address = "0.0.0.0"
+        port = {{ .Values.restserver.bindPort }}
+      }
+
+      integration-endpoint {
+        enabled = false
+      }
+
+      full-text-search {
+        {{- .Values.fullTextSearchConfig | nindent 4 }}
+      }
+
+      auth {
+        server-secret = {{ .Values.restserver.serverSecret | required "The server secret must be a long random string!" | quote }}
+      }
+      {{ if .Values.restserver.adminEndpointSecret }}
+      admin-endpoint {
+        secret = {{ .Values.restserver.adminEndpointSecret | quote }}
+      }
+      {{- end }}
+
+      # Configuration for the backend.
+      backend {
+        jdbc {
+          url = {{ print "jdbc:postgresql://" .Values.jdbc.host ":" .Values.jdbc.port "/" .Values.jdbc.database | quote }}
+          user = ${username}
+          password = ${password}
+        }
+
+        # Configuration for registering new users.
+        signup {
+          mode = {{ .Values.restserver.signup.mode | quote }}
+          {{- if eq .Values.restserver.signup.mode "invite" }}
+          new-invite-password = {{ .Values.restserver.signup.invite.password | required "the invite password is required in invite mode!" | quote }}
+          invite-time = {{ .Values.restserver.signup.invite.time | required "the invite time is required in invite mode!" | quote }}
+          {{- end}}
+        }
+
+        files {
+          {{- tpl (.Values.files.config | default "" | nindent 6) $ }}
+        }
+      }
+    }
+  ingress:
+    enabled: false
+    className: ''
+    annotations: {}
+    tlsSecretName: null
+
+joex:
+  image:
+    repo: 'ghcr.io/docspell/joex'
+    tag: null
+    pullPolicy: null
+  replicas: 1
+  resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+  jvmOptions: []
+  config: |
+    docspell.joex {
+      app-id = ${HOSTNAME}
+      base-url = ${BASE_URL}
+      bind {
+        address = "0.0.0.0"
+        port = 7878
+      }
+
+      jdbc {
+        url = {{ print "jdbc:postgresql://" .Values.jdbc.host ":" .Values.jdbc.port "/" .Values.jdbc.database | quote }}
+        user = ${username}
+        password = ${password}
+      }
+
+      full-text-search {
+        {{- .Values.fullTextSearchConfig | nindent 4 }}
+      }
+
+      files {
+        {{- tpl (.Values.files.config | default "" | nindent 4) $ }}
+      }
+    {{- range $name, $snippet := .Values.joex.configSnippets }}
+      # Snippet: {{ $name }}
+    {{ tpl ($snippet | indent 2) $ }}
+    {{- end }}
+    }

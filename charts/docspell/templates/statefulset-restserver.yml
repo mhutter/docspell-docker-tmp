@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "docspell.fullname" . }}-restserver
+  labels:
+    {{- include "docspell.labels" . | nindent 4 }}
+    docspell-component: restserver
+spec:
+  replicas: {{ .Values.restserver.replicas | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "docspell.selectorLabels" . | nindent 6 }}
+      docspell-component: restserver
+  template:
+    metadata:
+      annotations:
+        config-hash: {{ include (print $.Template.BasePath "/secret-restserver.yml") $ | sha256sum }}
+      labels:
+        {{- include "docspell.selectorLabels" . | nindent 8 }}
+        docspell-component: restserver
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: restserver
+        image: {{ print .Values.restserver.image.repo ":" (.Values.restserver.image.tag | default .Values.image.tag | default (print "v" .Chart.AppVersion)) | quote }}
+        imagePullPolicy: {{ .Values.restserver.image.pullPolicy | default .Values.image.pullPolicy | quote }}
+        args: ['/opt/docspell.conf']
+        envFrom:
+        - secretRef:
+            name: {{ .Values.jdbc.credentialsSecretName }}
+        volumeMounts:
+        - name: config
+          mountPath: /opt/docspell.conf
+          subPath: config
+        ports:
+        - name: api
+          containerPort: {{ .Values.restserver.bindPort }}
+          protocol: TCP
+        resources:
+          {{- toYaml .Values.restserver.resources | nindent 12 }}
+      volumes:
+      - name: config
+        secret:
+          secretName: {{ include "docspell.fullname" . }}-restserver-config

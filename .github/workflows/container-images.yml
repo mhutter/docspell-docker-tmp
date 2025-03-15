@@ -1,0 +1,40 @@
+name: Container Images
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - images/**
+    branches:
+      - main
+
+jobs:
+  build-joex:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build the Docker image
+      run: |
+        cd images
+        ./build.sh joex
+  build-restserver:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build the Docker image
+      run: |
+        cd images
+        ./build.sh restserver
+
